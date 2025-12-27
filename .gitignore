@@ -1,0 +1,16 @@
+backend/__pycache__/
+.env
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+.env
+
+secrets.txt
+manualtest.py
+test.ipynb
+observations_and_improvements.txt
+
+temp_uploads/
+Tesseract-OCR/
