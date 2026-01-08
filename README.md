@@ -21,7 +21,15 @@ Services:
 
 1. Copy `.env.example` to `.env` and fill in all required API keys (see Environment Variables section below).
 
-2. Create and activate a virtual environment:
+2. Install system dependencies:
+
+**Tesseract OCR** (required for image OCR processing):
+
+Install Tesseract based on your operating system. For detailed instructions, see the [official Tesseract installation guide](https://tesseract-ocr.github.io/tessdoc/Installation.html).
+
+**Note:** Docker users don't need to install Tesseract separately as it's included in the backend Docker image.
+
+3. Create and activate a virtual environment:
 
 ```bash
 # Windows
@@ -33,13 +41,13 @@ python -m venv venv
 source venv/bin/activate
 ```
 
-3. Install dependencies:
+4. Install Python dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Run the backend API server (Terminal 1):
+5. Run the backend API server (Terminal 1):
 
 ```bash
 uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
@@ -47,7 +55,7 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
 The backend API will be available at `http://localhost:8000`.
 
-5. Run the Streamlit frontend (Terminal 2):
+6. Run the Streamlit frontend (Terminal 2):
 
 ```bash
 streamlit run frontend\app.py
@@ -113,6 +121,9 @@ GROQ_MODEL=llama-3.1-8b-instant
 # Embedding Model
 EMBEDDING_MODEL=all-MiniLM-L6-v2
 EMBEDDING_DIMENSION=384
+
+# Tesseract (path)
+TESSERACT_CMD = tesseract_folder_path
 
 # API Server
 APP_HOST=0.0.0.0
