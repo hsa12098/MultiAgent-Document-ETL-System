@@ -196,6 +196,3 @@ if __name__ == "__main__":
         port=int(os.getenv("APP_PORT", 8000)),
         reload=os.getenv("ENV", "development") == "development"
     )
-
-#uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
-#streamlit run frontend\app.py
