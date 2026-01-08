@@ -149,8 +149,6 @@ class PineconeClient:
             List of matching schemas
         """
         try:
-            # Use a simple query vector (dummy) and filter by metadata
-            # For better results, embed a query like "schema for {doc_type}"
             query_text = f"schema for {doc_type}"
             query_vector = self.embed_text(query_text)
             

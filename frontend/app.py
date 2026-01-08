@@ -1,41 +1,3 @@
-# # frontend/app.py
-# import streamlit as st
-# import requests
-# import os
-
-# API_URL = os.getenv('API_URL', 'http://localhost:8000')
-
-# st.set_page_config(page_title='Doc ETL - Multi-Agent')
-# st.title('Multi-Agent Document Intelligence ETL')
-
-# uploaded = st.file_uploader('Upload document (PDF/DOCX/JPG/PNG)', type=['pdf', 'docx', 'doc', 'jpg', 'jpeg', 'png'])
-# model = st.selectbox('Select model', ['llama-3.1', 'mixtral-8x7b'])
-
-# if st.button('Start Processing') and uploaded is not None:
-#     with st.spinner('Uploading and processing...'):
-#         files = {'file': (uploaded.name, uploaded.getvalue(), uploaded.type)}
-#         data = {'model': model}
-#         resp = requests.post(f"{API_URL}/upload", files=files, data=data)
-#         if resp.status_code == 200:
-#             j = resp.json()
-#             st.success('Processing complete')
-#             st.subheader('Document Type')
-#             st.write(j.get('type'))
-#             st.subheader('Structured JSON')
-#             st.json(j.get('structured'))
-#             st.subheader('Raw text (truncated)')
-#             st.text(j.get('raw_text')[:2000])
-#             st.subheader('Pipeline logs')
-#             for l in j.get('logs', []):
-#                 st.text(l)
-#             if j.get('file_url'):
-#                 st.markdown(f"**Stored file:** {j.get('file_url')}")
-#         else:
-#             st.error(f"Processing failed: {resp.status_code} - {resp.text}")
-
-
-
-
 import streamlit as st
 import requests
 import json
@@ -303,7 +265,7 @@ with tab3:
     2. **🏷️ Classifies** documents by type using LLM
     3. **🔍 Retrieves** relevant extraction schemas from vector database using embeddings
     4. **📊 Extracts** structured data from unstructured documents
-    5. **✅ Validates** and normalizes extracted information
+    5. **✅ Validates** extracted information
     6. **💾 Persists** results to database
     
     ### 🏗️ Architecture

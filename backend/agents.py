@@ -7,10 +7,10 @@ from typing import TypedDict, Any
 
 from backend.groq_client import groq_client
 from backend.pinecone_utils import pinecone_client
-from backend.utils import make_prompt_for_classification, make_prompt_for_extraction, clean_text
+from backend.utils import make_prompt_for_classification, make_prompt_for_extraction, make_prompt_for_validation, clean_text
+from backend.utils import safe_json_load, extract_json
 from backend.parsers import parse_document
 from backend.supabase_client import insert_document_record, upload_file_and_get_url
-
 
 # ============ State Definition ============
 class DocumentState(TypedDict, total=False):
@@ -26,6 +26,37 @@ class DocumentState(TypedDict, total=False):
     error: str
     response: dict  
     pinecone_id: str
+    validation_errors: list[str]
+    validation_feedback: str
+    retry_count: int
+
+MAX_RETRIES = 1
+
+def extraction_router(state: DocumentState) -> str:
+    if state.get("error"):
+        return "response"
+
+    retry_count = state.get("retry_count")
+
+    # If we've already exhausted retries, skip validation
+    if retry_count >= MAX_RETRIES:
+        logger.info("Extraction retries exhausted — skipping validation")
+        return "persistence"
+
+    return "validation"
+
+def validation_router(state: DocumentState) -> str:
+    if state.get("error"):
+        return "response"
+    
+    if state.get("validation_errors"):
+        if state.get("retry_count") <= MAX_RETRIES:
+            return "extraction"   
+        else:
+            state["error"] = "Max validation retries exceeded"
+            return "persistence"
+
+    return "persistence"
 
 # ============ Agent Nodes ============
 
@@ -59,7 +90,7 @@ def classification_agent(state: DocumentState) -> DocumentState:
     try:
         logger.info("Classifying document")
         prompt = make_prompt_for_classification(state["raw_text"])
-        label = groq_client.generate(prompt, max_tokens=32, temperature=0.0).strip()
+        label = groq_client.generate(prompt, max_tokens=32, temperature=0.2).strip()
         label = label.split('\n')[0].strip().lower()
         state["doc_type"] = label
         logger.info(f"Document classified as: {label}")
@@ -137,9 +168,17 @@ def extraction_agent(state: DocumentState) -> DocumentState:
     try:
         logger.info("Extracting structured data")
         inner_json_str = state["schema"].get("schema")
-        state["schema"] = json.loads(inner_json_str)
-        prompt = make_prompt_for_extraction(state["schema"], state["raw_text"])
-        output = groq_client.generate(prompt, max_tokens=2048, temperature=0.0)
+        schema = json.loads(inner_json_str)
+        retry_count = state.get("retry_count", 0)
+        feedback = state.get("validation_feedback")
+
+        prompt = make_prompt_for_extraction(
+            schema=schema,
+            raw_text=state["raw_text"],
+            doc_type=state["doc_type"],
+            feedback=feedback,
+        )
+        output = groq_client.generate(prompt, max_tokens=10096, temperature=0.0)
         
         parsed = None
         try:
@@ -151,10 +190,9 @@ def extraction_agent(state: DocumentState) -> DocumentState:
                     parsed = json.loads(match.group(0))
                 except json.JSONDecodeError:
                     logger.error("Failed to parse extracted JSON block")
-        
         if parsed:
             state["extracted"] = parsed
-            logger.info(f"Extraction successful: {len(parsed)} fields extracted")
+            logger.info(f"Extraction successful: {len(parsed)} fields extracted (retry={retry_count})")
         else:
             logger.error("Failed to parse extraction output")
             state["error"] = "Extraction parsing failed"
@@ -168,44 +206,61 @@ def extraction_agent(state: DocumentState) -> DocumentState:
     return state
 
 
-def validation_agent(state: DocumentState) -> DocumentState:
+def validation_agent(state):
     """
-    5️⃣ Validation Agent: Ensure extracted data is usable.
-    Input: Extracted JSON
-    Output: Cleaned and normalized JSON
+    Validation Agent with bidirectional loop control
     """
     if state.get("error"):
         return state
-    
+
+    retry_count = state.get("retry_count", 0)
+    inner_json_str = state["schema"].get("schema")
+    schema = json.loads(inner_json_str)
     try:
-        logger.info("Validating extracted data")
-        validated = state["extracted"].copy() if state["extracted"] else {}
-        
-        if "email" in validated and validated["email"]:
-            validated["email"] = str(validated["email"]).lower().strip()
-        
-        if "phone" in validated and validated["phone"]:
-            validated["phone"] = re.sub(r"\D", "", str(validated["phone"]))
-        
-        if "amount" in validated and validated["amount"]:
-            try:
-                validated["amount"] = float(validated["amount"])
-            except (ValueError, TypeError):
-                logger.warning("Failed to convert amount to float")
-        
-        from datetime import datetime
-        validated["_validated_at"] = datetime.now().isoformat()
-        
-        state["validated"] = validated
-        logger.info(f"Validation successful: {len(validated)} fields validated")
-    
+        prompt = make_prompt_for_validation(
+            schema=schema,
+            extracted=state.get("extracted", {}),
+            raw_text=state["raw_text"],
+            doc_type=state.get("doc_type"),
+        )
+
+        output = groq_client.generate(
+            prompt=prompt,
+            max_tokens=10096,
+            temperature=0.0,
+        )
+        parsed = None
+        try:
+            parsed = extract_json(output)
+        except Exception as e:
+            logger.error(f"Validation JSON parse failed. Raw output:\n{output}")
+            raise
+
+        if not parsed:
+            raise ValueError("No valid JSON object found in LLM output")
+
+        is_valid = parsed.get("is_valid", False)
+        feedback = parsed.get("feedback", [])
+
+        if is_valid:
+            state["validation_errors"] = False
+            state["validation_feedback"] = None
+            logger.info("Validation passed")
+
+        else:
+            state["retry_count"] = retry_count + 1
+            state["validation_errors"] = True
+            state["validation_feedback"] = feedback
+            logger.info(
+                f"Validation failed, retrying extraction (retry={state['retry_count']})"
+            )
+
     except Exception as e:
         logger.exception("Validation agent failed")
         state["error"] = f"Validation failed: {str(e)}"
-        state["validated"] = state.get("extracted", {})
-    
-    return state
+        state["validation_errors"] = False
 
+    return state
 
 def persistence_agent(state: DocumentState) -> DocumentState:
     """
@@ -218,6 +273,7 @@ def persistence_agent(state: DocumentState) -> DocumentState:
     
     try:
         logger.info("Persisting document to Supabase")
+        state["validated"] = state.get("extracted", {})
         remote_name = os.path.basename(state["file_path"])
         state["file_url"] = upload_file_and_get_url(state["file_path"], remote_name)
         record_id = insert_document_record(
@@ -289,8 +345,25 @@ def build_document_etl_graph():
     graph.add_edge("parsing", "classification")
     graph.add_edge("classification", "rag_schema")
     graph.add_edge("rag_schema", "extraction")
-    graph.add_edge("extraction", "validation")
-    graph.add_edge("validation", "persistence")
+    graph.add_conditional_edges(
+    "extraction",
+    extraction_router,
+    {
+        "validation": "validation",
+        "persistence": "persistence",
+        "response": "response",
+    }
+    )
+
+    graph.add_conditional_edges(
+    "validation",
+    validation_router,
+    {
+        "extraction": "extraction",
+        "persistence": "persistence",
+        "response": "response",
+    }
+    )
     graph.add_edge("persistence", "response")
     graph.add_edge("response", END)
     
@@ -313,17 +386,23 @@ def process_document(file_path: str) -> dict:
     """
     try:
         initial_state: DocumentState = {
-            "file_path": file_path,
-            "raw_text": "",
-            "doc_type": "",
-            "schema": {},
-            "extracted": {},
-            "validated": {},
-            "file_url": "",
-            "record_id": None,
-            "error": None,
-            "response": {}
-        }
+        "file_path": file_path,
+        "raw_text": "",
+        "doc_type": "",
+        "schema": {},
+        "extracted": {},
+        "validated": {},
+        "retry_count": 0,
+        "validation_errors": [],
+        "validation_feedback": "",
+        "error": None,
+        "pinecone_id": "",
+        "retry_count": 0,
+        "validation_errors": [],
+        "validation_feedback": "",
+        "response": {}
+    }
+
         
         logger.info(f"Starting document processing for: {file_path}")
         final_state = document_etl_graph.invoke(initial_state)

@@ -1,100 +1,3 @@
-# # backend/main.py
-# import os
-# import shutil
-# from fastapi import FastAPI, File, UploadFile, Form
-# from fastapi.responses import JSONResponse
-# from fastapi.middleware.cors import CORSMiddleware
-# from loguru import logger
-# from pathlib import Path
-# import uvicorn
-
-# from backend.parsers import parse_any_file
-# from backend.utils import clean_text, safe_filename
-# from backend.agents import ClassifierAgent, RAGAgent, ExtractorAgent, ValidationAgent, StorageAgent, WriterAgent
-
-# TEMP_DIR = Path("/tmp/uploads")
-# TEMP_DIR.mkdir(parents=True, exist_ok=True)
-
-# app = FastAPI(title="Multi-Agent Document Intelligence ETL System")
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
-
-# # instantiate agents
-# classifier = ClassifierAgent()
-# rag = RAGAgent()
-# extractor = ExtractorAgent()
-# validator = ValidationAgent()
-# storage = StorageAgent()
-# writer = WriterAgent()
-
-
-# @app.post("/upload")
-# async def upload(file: UploadFile = File(...), model: str = Form("llama-3.1")):
-#     # Save to temp
-#     filename = safe_filename(file.filename)
-#     local_path = TEMP_DIR / filename
-#     with open(local_path, "wb") as f:
-#         contents = await file.read()
-#         f.write(contents)
-
-#     # Parse
-#     raw_text = parse_any_file(filename, contents)
-#     raw_text = clean_text(raw_text)
-
-#     # Orchestration (synchronous for simplicity)
-#     logs = []
-#     try:
-#         logs.append("Classifying document...")
-#         doc_type = classifier.run(raw_text)
-#         logs.append(f"Document type: {doc_type}")
-
-#         logs.append("RAG lookup for schema...")
-#         schema_metadata = rag.run(doc_type, raw_text)
-#         logs.append(f"Schema metadata keys: {list(schema_metadata.keys())}")
-
-#         logs.append("Extracting structured fields...")
-#         structured = extractor.run(raw_text, schema_metadata)
-#         logs.append("Extraction complete")
-
-#         logs.append("Validating and cleaning fields...")
-#         cleaned = validator.run(doc_type, structured)
-#         logs.append("Validation complete")
-
-#         logs.append("Uploading file to storage...")
-#         file_url = storage.run(str(local_path), filename)
-#         logs.append(f"File uploaded to: {file_url}")
-
-#         logs.append("Writing record to DB...")
-#         resp = writer.run(doc_type, raw_text, cleaned, file_url)
-#         logs.append("Write complete")
-
-#         result = {
-#             "type": doc_type,
-#             "structured": cleaned,
-#             "raw_text": raw_text[:10000],
-#             "file_url": file_url,
-#             "db_response": str(resp),
-#             "logs": logs,
-#         }
-#         return JSONResponse(result)
-#     finally:
-#         try:
-#             # clean temp file
-#             if local_path.exists():
-#                 local_path.unlink()
-#         except Exception:
-#             pass
-
-
-# if __name__ == "__main__":
-#     uvicorn.run("backend.main:app", host=os.getenv("APP_HOST", "0.0.0.0"), port=int(os.getenv("APP_PORT", 8000)))
-
-
-
 import os
 import shutil
 from pathlib import Path
@@ -103,11 +6,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 import uvicorn
-
-from backend.parsers import parse_document
-from backend.utils import clean_text
 from backend.agents import process_document
-from backend.supabase_client import upload_file_and_get_url
 
 TEMP_DIR = Path("./temp_uploads")
 TEMP_DIR.mkdir(parents=True, exist_ok=True)

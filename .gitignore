@@ -8,6 +8,7 @@ backend/__pycache__/
 .env
 
 secrets.txt
+new_test.ipynb
 manualtest.py
 test.ipynb
 observations_and_improvements.txt
