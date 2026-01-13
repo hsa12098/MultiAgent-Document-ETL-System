@@ -51,19 +51,40 @@ def _parse_pdf(file_path: str) -> str:
 
 
 def _parse_docx(file_path: str) -> str:
-    """Extract text from DOCX"""
+    """Extract text from DOCX (paragraphs + tables)"""
     try:
         from docx import Document
+
         doc = Document(file_path)
-        text = "\n".join([para.text for para in doc.paragraphs])
+        chunks = []
+
+        # Extract normal paragraphs
+        for para in doc.paragraphs:
+            if para.text.strip():
+                chunks.append(para.text)
+
+        # Extract tables
+        for table in doc.tables:
+            for row in table.rows:
+                row_text = [
+                    cell.text.strip()
+                    for cell in row.cells
+                    if cell.text.strip()
+                ]
+                if row_text:
+                    chunks.append(" | ".join(row_text))
+
+        text = "\n".join(chunks)
         logger.info(f"Extracted text from DOCX: {len(text)} chars")
         return text
+
     except ImportError:
         logger.error("python-docx not installed")
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("DOCX parsing failed")
         raise
+
 
 
 def _parse_image(file_path: str) -> str:
