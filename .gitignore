@@ -16,5 +16,4 @@ temp_uploads/
 Tesseract-OCR/
 vercel.json
 src/__pycache__/
-src/app.py
 .gitignore
