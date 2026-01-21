@@ -5,12 +5,12 @@ from loguru import logger
 from langgraph.graph import StateGraph, START, END
 from typing import TypedDict, Any
 
-from backend.groq_client import groq_client
-from backend.pinecone_utils import pinecone_client
-from backend.utils import make_prompt_for_classification, make_prompt_for_extraction, make_prompt_for_validation, clean_text
-from backend.utils import safe_json_load, extract_json
-from backend.parsers import parse_document
-from backend.supabase_client import insert_document_record, upload_file_and_get_url
+from src.groq_client import groq_client
+from src.pinecone_utils import pinecone_client
+from src.utils import make_prompt_for_classification, make_prompt_for_extraction, make_prompt_for_validation, clean_text
+from src.utils import safe_json_load, extract_json
+from src.parsers import parse_document
+from src.supabase_client import insert_document_record, upload_file_and_get_url
 
 # ============ State Definition ============
 class DocumentState(TypedDict, total=False):

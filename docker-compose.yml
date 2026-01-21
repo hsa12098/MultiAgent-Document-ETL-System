@@ -1,23 +1,23 @@
 version: "3.9"
 
 services:
-  backend:
+  src:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: src/Dockerfile
     env_file:
       - .env
     ports:
       - "8000:8000"
 
-  frontend:
+  app:
     build:
       context: .
-      dockerfile: frontend/Dockerfile
+      dockerfile: app/Dockerfile
     environment:
-      API_URL: http://backend:8000
+      API_URL: http://src:8000
     depends_on:
-      - backend
+      - src
     ports:
       - "8501:8501"
 
