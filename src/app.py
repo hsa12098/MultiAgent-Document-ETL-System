@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 import uvicorn
-from backend.agents import process_document
+from src.agents import process_document
 
 TEMP_DIR = Path("./temp_uploads")
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
