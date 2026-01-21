@@ -15,6 +15,6 @@ observations_and_improvements.txt
 temp_uploads/
 Tesseract-OCR/
 vercel.json
-/src/__pycache__/
-/src/app.py
+src/__pycache__/
+src/app.py
 .gitignore
